@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-fixed-dim: #bdc2ff;
+  --color-tertiary-fixed-dim: #ffb3ac;
+  --color-on-primary: #ffffff;
+  --color-surface-bright: #f9f9f9;
+  --color-tertiary-fixed: #ffdad6;
+  --color-on-tertiary-container: #ff635b;
+  --color-on-secondary-fixed: #002204;
+  --color-on-surface-variant: #454652;
+  --color-on-secondary-container: #217128;
+  --color-primary-container: #1a237e;
+  --color-primary: #000666;
+  --color-on-error-container: #93000a;
+  --color-surface-container-high: #e8e8e8;
+  --color-secondary-container: #a0f399;
+  --color-surface-tint: #4c56af;
+  --color-inverse-surface: #2f3131;
+  --color-on-error: #ffffff;
+  --color-outline: #767683;
+  --color-background: #f9f9f9;
+  --color-error: #ba1a1a;
+  --color-outline-variant: #c6c5d4;
+  --color-on-primary-fixed: #000767;
+  --color-surface-dim: #dadada;
+  --color-tertiary: #400003;
+  --color-surface-container-lowest: #ffffff;
+  --color-tertiary-container: #670008;
+  --color-on-primary-container: #8690ee;
+  --color-secondary: #1b6d24;
+  --color-inverse-primary: #bdc2ff;
+  --color-on-primary-fixed-variant: #343d96;
+  --color-on-surface: #1a1c1c;
+  --color-on-tertiary-fixed-variant: #930010;
+  --color-surface-container: #eeeeee;
+  --color-surface-container-highest: #e2e2e2;
+  --color-secondary-fixed: #a3f69c;
+  --color-on-background: #1a1c1c;
+  --color-error-container: #ffdad6;
+  --color-surface-variant: #e2e2e2;
+  --color-surface-container-low: #f3f3f3;
+  --color-surface: #f9f9f9;
+  --color-primary-fixed: #e0e0ff;
+  --color-on-secondary: #ffffff;
+  --color-on-tertiary: #ffffff;
+  --color-on-tertiary-fixed: #410003;
+  --color-secondary-fixed-dim: #88d982;
+  --color-on-secondary-fixed-variant: #005312;
+  --color-inverse-on-surface: #f1f1f1;
+
+  --radius-DEFAULT: 0.125rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.5rem;
+  --radius-full: 0.75rem;
+
+  --spacing-gutter-mobile: 12px;
+  --spacing-xl: 32px;
+  --spacing-sm: 12px;
+  --spacing-lg: 24px;
+  --spacing-md: 16px;
+  --spacing-base: 4px;
+  --spacing-xs: 8px;
+  --spacing-margin-mobile: 16px;
+
+  --font-headline-lg: "Inter", sans-serif;
+  --font-table-data: "Inter", sans-serif;
+  --font-display-financial: "Inter", sans-serif;
+  --font-body-lg: "Inter", sans-serif;
+  --font-headline-md: "Inter", sans-serif;
+  --font-body-md: "Inter", sans-serif;
+  --font-label-bold: "Inter", sans-serif;
+}
+
+@utility text-headline-lg {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+}
+@utility text-table-data {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 500;
+}
+@utility text-display-financial {
+  font-size: 36px;
+  line-height: 44px;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+@utility text-body-lg {
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 400;
+}
+@utility text-headline-md {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+@utility text-body-md {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+}
+@utility text-label-bold {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
