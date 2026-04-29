@@ -8,6 +8,7 @@ interface TruckLog {
   fuelCost: number;
   income: number;
   memo: string;
+  receiptChecked?: boolean;
   createdAt: number;
 }
 
@@ -122,7 +123,10 @@ function renderLogs() {
       </td>
       <td class="p-2 align-middle break-words whitespace-normal py-3">
         <div class="text-[13px] whitespace-pre-wrap leading-snug mb-1.5 text-gray-600">${escapeHTML(log.memo) || '<span class="opacity-40 italic">내역 없음</span>'}</div>
-        <div class="text-[11px] font-bold text-pink-500 tracking-tight bg-pink-50 rounded-md px-1.5 py-0.5 mt-0.5 shadow-sm border border-pink-100 inline-block">⛽ ${formatNumber(log.fuelCost)}원</div>
+        <div class="flex gap-1 flex-wrap">
+          <div class="text-[11px] font-bold text-pink-500 tracking-tight bg-pink-50 rounded-md px-1.5 py-0.5 mt-0.5 shadow-sm border border-pink-100 inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2a2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/></svg> ${formatNumber(log.fuelCost)}원</div>
+          ${log.receiptChecked ? '<div class="text-[11px] font-bold text-indigo-500 tracking-tight bg-indigo-50 rounded-md px-1.5 py-0.5 mt-0.5 shadow-sm border border-indigo-100 inline-flex items-center gap-1"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> 인수증</div>' : ''}
+        </div>
       </td>
       <td class="p-2 text-[14px] text-right font-extrabold align-middle whitespace-nowrap tracking-tight text-emerald-600 drop-shadow-sm">
         ${formatNumber(log.income)}원
@@ -170,6 +174,7 @@ function startEditing(id: string) {
   const fuelCostInput = document.getElementById('fuelCostInput') as HTMLInputElement;
   const incomeInput = document.getElementById('incomeInput') as HTMLInputElement;
   const memoInput = document.getElementById('memoInput') as HTMLInputElement;
+  const receiptInput = document.getElementById('receiptInput') as HTMLInputElement;
   const saveBtn = document.getElementById('saveBtn') as HTMLButtonElement;
   const cancelBtn = document.getElementById('cancelBtn') as HTMLButtonElement;
 
@@ -183,6 +188,7 @@ function startEditing(id: string) {
   if (fuelCostInput) fuelCostInput.value = log.fuelCost ? formatNumber(log.fuelCost) : '';
   if (incomeInput) incomeInput.value = log.income ? formatNumber(log.income) : '';
   if (memoInput) memoInput.value = log.memo;
+  if (receiptInput) receiptInput.checked = !!log.receiptChecked;
 
   if (saveBtn) saveBtn.textContent = '기록 수정';
   if (cancelBtn) cancelBtn.classList.remove('hidden');
@@ -200,6 +206,7 @@ function resetForm() {
   const fuelCostInput = document.getElementById('fuelCostInput') as HTMLInputElement;
   const incomeInput = document.getElementById('incomeInput') as HTMLInputElement;
   const memoInput = document.getElementById('memoInput') as HTMLInputElement;
+  const receiptInput = document.getElementById('receiptInput') as HTMLInputElement;
   const saveBtn = document.getElementById('saveBtn') as HTMLButtonElement;
   const cancelBtn = document.getElementById('cancelBtn') as HTMLButtonElement;
 
@@ -208,6 +215,7 @@ function resetForm() {
   if (fuelCostInput) fuelCostInput.value = '';
   if (incomeInput) incomeInput.value = '';
   if (memoInput) memoInput.value = '';
+  if (receiptInput) receiptInput.checked = false;
   if (startDateInput) startDateInput.value = getTodayString();
   if (endDateInput) endDateInput.value = getTodayString();
 
@@ -295,6 +303,7 @@ function initApp() {
   const fuelCostInput = document.getElementById('fuelCostInput') as HTMLInputElement;
   const incomeInput = document.getElementById('incomeInput') as HTMLInputElement;
   const memoInput = document.getElementById('memoInput') as HTMLInputElement;
+  const receiptInput = document.getElementById('receiptInput') as HTMLInputElement;
   const saveBtn = document.getElementById('saveBtn') as HTMLButtonElement;
   const cancelBtn = document.getElementById('cancelBtn') as HTMLButtonElement;
   const downloadExcelBtn = document.getElementById('downloadExcelBtn');
@@ -333,7 +342,8 @@ function initApp() {
             route: `${originInput.value} → ${destInput.value}`,
             fuelCost: parseNumber(fuelCostInput.value || '0'),
             income: parseNumber(incomeInput.value),
-            memo: memoInput.value || ''
+            memo: memoInput.value || '',
+            receiptChecked: receiptInput ? receiptInput.checked : false
           };
         }
         editingLogId = null;
@@ -347,6 +357,7 @@ function initApp() {
           fuelCost: parseNumber(fuelCostInput.value || '0'),
           income: parseNumber(incomeInput.value),
           memo: memoInput.value || '',
+          receiptChecked: receiptInput ? receiptInput.checked : false,
           createdAt: Date.now()
         };
         logs.push(newLog);
@@ -440,7 +451,7 @@ function downloadExcel() {
     return;
   }
   
-  const headers = ['출발 날짜', '도착 날짜', '출발/도착', '내역', '유류비', '운임'];
+  const headers = ['출발 날짜', '도착 날짜', '출발/도착', '내역', '유류비', '운임', '인수증'];
   // Create CSV content (UTF-8 with BOM for Excel)
   let csvContent = '\uFEFF' + headers.join(',') + '\n';
   
@@ -451,7 +462,8 @@ function downloadExcel() {
       `"${(log.route || '').replace(/"/g, '""')}"`,
       `"${(log.memo || '').replace(/"/g, '""')}"`,
       log.fuelCost || 0,
-      log.income || 0
+      log.income || 0,
+      log.receiptChecked ? 'O' : 'X'
     ];
     csvContent += row.join(',') + '\n';
   });
