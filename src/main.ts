@@ -14,6 +14,7 @@ interface TruckLog {
 
 const STORAGE_KEY = 'truck_logs';
 let editingLogId: string | null = null;
+let selectedMonthFilter: string | null = null;
 
 function formatNumber(num: number): string {
   return num.toLocaleString('ko-KR');
@@ -62,18 +63,24 @@ function deleteLog(id: string) {
 function renderDashboard() {
   const logs = getLogs();
   
-  // Create current month filter
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const currentMonthLogs = logs.filter(log => log.startDate && log.startDate.startsWith(currentMonth));
+  // Use filter
+  const filterMonth = selectedMonthFilter || new Date().toISOString().slice(0, 7);
+  const currentMonthLogs = logs.filter(log => log.startDate && log.startDate.startsWith(filterMonth));
   
   const totalIncome = currentMonthLogs.reduce((sum, log) => sum + (log.income || 0), 0);
   const totalFuelCost = currentMonthLogs.reduce((sum, log) => sum + (log.fuelCost || 0), 0);
   
   const incomeEl = document.getElementById('totalIncome');
   const fuelCostEl = document.getElementById('totalFuelCost');
+  const incomeLabel = document.getElementById('totalIncomeLabel');
+  const fuelCostLabel = document.getElementById('totalFuelCostLabel');
   
   if (incomeEl) incomeEl.textContent = `${formatNumber(totalIncome)}원`;
   if (fuelCostEl) fuelCostEl.textContent = `${formatNumber(totalFuelCost)}원`;
+
+  const monthNum = parseInt(filterMonth.split('-')[1], 10);
+  if (incomeLabel) incomeLabel.textContent = `${monthNum}월 총 매출`;
+  if (fuelCostLabel) fuelCostLabel.textContent = `${monthNum}월 유류비`;
 }
 
 function renderLogs() {
@@ -81,12 +88,23 @@ function renderLogs() {
   if (!tbody) return;
   
   tbody.innerHTML = '';
-  const logs = getLogs().sort((a, b) => {
+
+  const filterMonth = selectedMonthFilter || new Date().toISOString().slice(0, 7);
+  
+  const logs = getLogs()
+    .filter(log => log.startDate && log.startDate.startsWith(filterMonth))
+    .sort((a, b) => {
     if (a.startDate !== b.startDate) {
       return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
     }
     return b.createdAt - a.createdAt;
   });
+
+  const titleEl = document.getElementById('logViewTitle');
+  if (titleEl) {
+    const monthNum = parseInt(filterMonth.split('-')[1], 10);
+    titleEl.textContent = `${monthNum}월 운행 일지`;
+  }
   
   if (logs.length === 0) {
     tbody.innerHTML = `
@@ -257,11 +275,11 @@ function renderSummary() {
     const monthLabel = `${year}년 ${parseInt(monthNum, 10)}월`;
 
     const el = document.createElement('div');
-    el.className = 'bg-white shadow-none p-5 flex flex-col gap-3 border-b border-slate-100 relative overflow-hidden';
+    el.className = 'bg-white shadow-none p-5 flex flex-col gap-3 border-b border-slate-100 relative overflow-hidden cursor-pointer hover:bg-slate-50 transition-colors group';
 
     el.innerHTML = `
-      <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-50 rounded-full blur-2xl pointer-events-none"></div>
-      <h3 class="text-[18px] font-extrabold text-indigo-900 border-b border-slate-100 pb-3 mb-1 drop-shadow-sm">${monthLabel}</h3>
+      <div class="absolute -right-10 -top-10 w-32 h-32 bg-indigo-50 rounded-full blur-2xl pointer-events-none group-hover:bg-indigo-100 transition-colors"></div>
+      <h3 class="text-[18px] font-extrabold text-indigo-900 border-b border-slate-100 pb-3 mb-1 drop-shadow-sm group-hover:text-indigo-700 transition-colors">${monthLabel}</h3>
       <div class="flex justify-between items-center text-[14px]">
         <span class="font-bold text-slate-500">총 매출</span>
         <span class="font-extrabold text-emerald-600">${formatNumber(data.income)}원</span>
@@ -271,6 +289,13 @@ function renderSummary() {
         <span class="font-extrabold text-pink-500">${formatNumber(data.fuelCost)}원</span>
       </div>
     `;
+
+    el.addEventListener('click', () => {
+      selectedMonthFilter = month;
+      renderDashboard();
+      renderLogs();
+      switchTab('log');
+    });
 
     summaryContainer.appendChild(el);
   });
@@ -364,6 +389,9 @@ function initApp() {
       }
       
       saveLogs(logs);
+
+      // Keep focus on the month just edited/saved
+      selectedMonthFilter = startDateInput.value.slice(0, 7);
       
       resetForm();
       
@@ -391,6 +419,11 @@ function initApp() {
   if (navLog) {
     navLog.addEventListener('click', (e) => {
       e.preventDefault();
+      // Only reset filter if clicking the log nav icon directly while not in edit mode?
+      // Actually, let's reset to current month when clicking the nav menu
+      selectedMonthFilter = new Date().toISOString().slice(0, 7);
+      renderDashboard();
+      renderLogs();
       switchTab('log');
     });
   }
@@ -439,11 +472,15 @@ function switchTab(tab: 'input' | 'log' | 'summary') {
 }
 
 function downloadExcel() {
-  const logs = getLogs().sort((a, b) => {
-    if (a.startDate !== b.startDate) {
-      return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
-    }
-    return b.createdAt - a.createdAt;
+  const filterMonth = selectedMonthFilter || new Date().toISOString().slice(0, 7);
+  
+  const logs = getLogs()
+    .filter(log => log.startDate && log.startDate.startsWith(filterMonth))
+    .sort((a, b) => {
+      if (a.startDate !== b.startDate) {
+        return new Date(b.startDate).getTime() - new Date(a.startDate).getTime();
+      }
+      return b.createdAt - a.createdAt;
   });
   
   if (logs.length === 0) {
