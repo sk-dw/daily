@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isSignedIn() { return request.auth != null; }
+
+    function isValidTruckLog(data) {
+      return data.keys().hasAll(['userId', 'startDate', 'endDate', 'route', 'fuelCost', 'income', 'createdAt'])
+        && data.userId == request.auth.uid
+        && data.startDate is string && data.startDate.size() <= 20
+        && data.endDate is string && data.endDate.size() <= 20
+        && data.route is string && data.route.size() <= 256
+        && data.fuelCost is number
+        && data.income is number
+        && data.createdAt is number
+        && (data.get('memo', '') is string && data.get('memo', '').size() <= 1024)
+        && (data.get('receiptChecked', false) is bool)
+        && (data.get('updatedAt', request.time.toMillis()) is number);
+    }
+
+    match /truckLogs/{logId} {
+      allow get: if isSignedIn() && isValidId(logId) && existing().userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(logId)
+        && isValidTruckLog(incoming())
+        && incoming().keys().size() >= 7 && incoming().keys().size() <= 10;
+        
+      allow update: if isSignedIn()
+        && isValidId(logId)
+        && existing().userId == request.auth.uid
+        && isValidTruckLog(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['startDate', 'endDate', 'route', 'fuelCost', 'income', 'memo', 'receiptChecked', 'updatedAt'])
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt;
+        
+      allow delete: if isSignedIn()
+        && isValidId(logId)
+        && existing().userId == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "TruckLog": {
+      "title": "TruckLog",
+      "description": "A single truck driving log entry",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this log" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "route": { "type": "string" },
+        "fuelCost": { "type": "number" },
+        "income": { "type": "number" },
+        "memo": { "type": "string" },
+        "receiptChecked": { "type": "boolean" },
+        "createdAt": { "type": "number", "description": "Timestamp" },
+        "updatedAt": { "type": "number", "description": "Timestamp" }
+      },
+      "required": ["userId", "startDate", "endDate", "route", "fuelCost", "income", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/truckLogs/{logId}": {
+      "schema": { "$ref": "#/entities/TruckLog" },
+      "description": "Stores truck driving logs"
+    }
+  }
+}

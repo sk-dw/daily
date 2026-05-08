@@ -1,7 +1,64 @@
 import './index.css';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
+import firebaseConfig from '../firebase-applet-config.json';
+
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth();
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData?.map(provider => ({
+        providerId: provider.providerId,
+        email: provider.email,
+      })) || []
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  alert('처리 중 오류가 발생했습니다: ' + (error instanceof Error ? error.message : String(error)));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 interface TruckLog {
   id: string;
+  userId: string;
   startDate: string;
   endDate: string;
   route: string;
@@ -10,9 +67,11 @@ interface TruckLog {
   memo: string;
   receiptChecked?: boolean;
   createdAt: number;
+  updatedAt?: number;
 }
 
-const STORAGE_KEY = 'truck_logs';
+let appLogs: TruckLog[] = [];
+let unsubscribeLogs: (() => void) | null = null;
 let editingLogId: string | null = null;
 let selectedMonthFilter: string | null = null;
 
@@ -37,28 +96,70 @@ function applyCommaFormat(element: HTMLInputElement) {
 }
 
 function getLogs(): TruckLog[] {
+  return appLogs;
+}
+
+async function saveLog(log: Omit<TruckLog, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, existingId?: string) {
+  if (!auth.currentUser) return;
+  
+  const path = 'truckLogs';
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
-  } catch (e) {
-    console.error('Failed to parse logs', e);
-    return [];
+    if (existingId) {
+      const existingLog = appLogs.find(l => l.id === existingId);
+      if (!existingLog) return;
+      await updateDoc(doc(db, path, existingId), {
+        ...log,
+        updatedAt: Date.now()
+      });
+    } else {
+      const newRef = doc(collection(db, path));
+      const newLog: TruckLog = {
+        id: newRef.id,
+        userId: auth.currentUser.uid,
+        ...log,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      await setDoc(newRef, newLog);
+    }
+  } catch (error) {
+    handleFirestoreError(error, existingId ? OperationType.UPDATE : OperationType.CREATE, path);
   }
 }
 
-function saveLogs(logs: TruckLog[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-}
+let logToDelete: string | null = null;
 
-function deleteLog(id: string) {
-  if (confirm('이 기록을 삭제하시겠습니까?')) {
-    const logs = getLogs().filter(log => log.id !== id);
-    saveLogs(logs);
-    renderDashboard();
-    renderLogs();
-    renderSummary();
+async function deleteLog(id: string) {
+  const path = 'truckLogs';
+  try {
+    await deleteDoc(doc(db, path, id));
+  } catch(error) {
+     handleFirestoreError(error, OperationType.DELETE, path);
   }
 }
+
+function confirmDeleteLog(id: string) {
+  logToDelete = id;
+  const modal = document.getElementById('delete-modal');
+  const modalContent = document.getElementById('delete-modal-content');
+  if (modal && modalContent) {
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    modalContent.classList.remove('scale-95');
+    modalContent.classList.add('scale-100');
+  }
+}
+
+function closeDeleteModal() {
+  logToDelete = null;
+  const modal = document.getElementById('delete-modal');
+  const modalContent = document.getElementById('delete-modal-content');
+  if (modal && modalContent) {
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    modalContent.classList.remove('scale-100');
+    modalContent.classList.add('scale-95');
+  }
+}
+
 
 function renderDashboard() {
   const logs = getLogs();
@@ -167,7 +268,7 @@ function renderLogs() {
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       const id = (e.currentTarget as HTMLButtonElement).getAttribute('data-id');
-      if (id) deleteLog(id);
+      if (id) confirmDeleteLog(id);
     });
   });
 
@@ -326,6 +427,29 @@ function initApp() {
   const originInput = document.getElementById('originInput') as HTMLInputElement;
   const destInput = document.getElementById('destInput') as HTMLInputElement;
   const fuelCostInput = document.getElementById('fuelCostInput') as HTMLInputElement;
+  
+  const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+  const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+  
+  if (cancelDeleteBtn) {
+    cancelDeleteBtn.addEventListener('click', closeDeleteModal);
+  }
+  if (confirmDeleteBtn) {
+    confirmDeleteBtn.addEventListener('click', async () => {
+      console.log('Confirm delete clicked for id:', logToDelete);
+      if (logToDelete) {
+        try {
+          await deleteLog(logToDelete);
+          console.log('Delete successful');
+        } catch(error) {
+          console.error('Delete error:', error);
+          alert('기록 삭제에 실패했습니다. 권한이 없거나 네트워크 오류입니다.');
+        } finally {
+          closeDeleteModal();
+        }
+      }
+    });
+  }
   const incomeInput = document.getElementById('incomeInput') as HTMLInputElement;
   const memoInput = document.getElementById('memoInput') as HTMLInputElement;
   const receiptInput = document.getElementById('receiptInput') as HTMLInputElement;
@@ -348,57 +472,38 @@ function initApp() {
   if (incomeInput) applyCommaFormat(incomeInput);
   
   if (saveBtn) {
-    saveBtn.addEventListener('click', () => {
+    saveBtn.addEventListener('click', async () => {
       // Validate
       if (!startDateInput.value || !endDateInput.value || !originInput.value || !destInput.value || !incomeInput.value) {
         alert('필수 입력 항목을 확인해주세요 (날짜, 출발지, 도착지, 운임).');
         return;
       }
       
-      const logs = getLogs();
+      const draftLog = {
+        startDate: startDateInput.value,
+        endDate: endDateInput.value,
+        route: `${originInput.value} → ${destInput.value}`,
+        fuelCost: parseNumber(fuelCostInput.value || '0'),
+        income: parseNumber(incomeInput.value),
+        memo: memoInput.value || '',
+        receiptChecked: receiptInput ? receiptInput.checked : false
+      };
       
       if (editingLogId) {
-        const index = logs.findIndex(l => l.id === editingLogId);
-        if (index !== -1) {
-          logs[index] = {
-            ...logs[index],
-            startDate: startDateInput.value,
-            endDate: endDateInput.value,
-            route: `${originInput.value} → ${destInput.value}`,
-            fuelCost: parseNumber(fuelCostInput.value || '0'),
-            income: parseNumber(incomeInput.value),
-            memo: memoInput.value || '',
-            receiptChecked: receiptInput ? receiptInput.checked : false
-          };
-        }
+        await saveLog(draftLog, editingLogId);
         editingLogId = null;
         saveBtn.textContent = '기록 저장';
       } else {
-        const newLog: TruckLog = {
-          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-          startDate: startDateInput.value,
-          endDate: endDateInput.value,
-          route: `${originInput.value} → ${destInput.value}`,
-          fuelCost: parseNumber(fuelCostInput.value || '0'),
-          income: parseNumber(incomeInput.value),
-          memo: memoInput.value || '',
-          receiptChecked: receiptInput ? receiptInput.checked : false,
-          createdAt: Date.now()
-        };
-        logs.push(newLog);
+        await saveLog(draftLog);
       }
       
-      saveLogs(logs);
-
       // Keep focus on the month just edited/saved
       selectedMonthFilter = startDateInput.value.slice(0, 7);
       
       resetForm();
       
-      renderDashboard();
-      renderLogs();
-      renderSummary();
-
+      // Note: render functions are handled automatically by onSnapshot
+      
       // Switch to log view after saving
       switchTab('log');
     });
@@ -515,4 +620,66 @@ function downloadExcel() {
   document.body.removeChild(link);
 }
 
-document.addEventListener('DOMContentLoaded', initApp);
+function initAuth() {
+  const authOverlay = document.getElementById('auth-overlay');
+  const signInBtn = document.getElementById('signInBtn');
+  const signOutBtn = document.getElementById('signOutBtn');
+
+  if (signInBtn) {
+    signInBtn.addEventListener('click', async () => {
+      try {
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error('Sign in failed', error);
+      }
+    });
+  }
+
+  if (signOutBtn) {
+    signOutBtn.addEventListener('click', async () => {
+      await signOut(auth);
+    });
+  }
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      if (authOverlay) authOverlay.classList.add('hidden');
+      if (signOutBtn) signOutBtn.classList.remove('hidden');
+      listenToLogs();
+    } else {
+      if (authOverlay) authOverlay.classList.remove('hidden');
+      if (signOutBtn) signOutBtn.classList.add('hidden');
+      if (unsubscribeLogs) {
+        unsubscribeLogs();
+        unsubscribeLogs = null;
+      }
+      appLogs = [];
+      renderDashboard();
+      renderLogs();
+      renderSummary();
+    }
+  });
+}
+
+function listenToLogs() {
+  if (!auth.currentUser) return;
+  const q = query(collection(db, 'truckLogs'), where('userId', '==', auth.currentUser.uid));
+  
+  unsubscribeLogs = onSnapshot(q, (snapshot) => {
+    appLogs = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return { ...data, id: doc.id } as TruckLog;
+    });
+    renderDashboard();
+    renderLogs();
+    renderSummary();
+  }, (error) => {
+    handleFirestoreError(error, OperationType.LIST, 'truckLogs');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
+  initAuth();
+});
