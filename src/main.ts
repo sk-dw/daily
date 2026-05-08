@@ -1,6 +1,6 @@
 import './index.css';
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, where, serverTimestamp } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -628,10 +628,26 @@ function initAuth() {
   if (signInBtn) {
     signInBtn.addEventListener('click', async () => {
       try {
+        const authLoading = document.getElementById('auth-loading');
+        if (authLoading) authLoading.classList.remove('hidden');
+        
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
       } catch (error) {
         console.error('Sign in failed', error);
+        
+        // Show specific error messages to help user figure out the issue
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('popup-blocked') || errorMessage.includes('popup-closed-by-user')) {
+          alert('로그인 팝업이 차단되었거나 닫혔습니다.\n\n해결 방법:\n[모바일 환경]\n1. 오른쪽 위의 "새로운 탭에서 열기"를 눌러주세요.\n2. 다른 브라우저(크롬, 사파리)에서 열어주세요.\n\n[PC 환경]\n브라우저 주소창 오른쪽의 "팝업 차단"을 해제해주세요.');
+        } else if (errorMessage.includes('unauthorized-domain')) {
+           alert('Firebase 승인된 도메인에 현재 도메인이 등록되어 있지 않습니다.\nFirebase Console > Authentication > Settings > Authorized domains 에 도메인을 추가해주세요.');
+        } else {
+          alert('로그인 처리 중 오류가 발생했습니다.\n\n모바일 인앱 브라우저(카카오톡 등)에서는 로그인이 제한될 수 있습니다. 일반 브라우저로 앱을 열어주세요.\n\n상세 에러: ' + errorMessage);
+        }
+      } finally {
+        const authLoading = document.getElementById('auth-loading');
+        if (authLoading) authLoading.classList.add('hidden');
       }
     });
   }
